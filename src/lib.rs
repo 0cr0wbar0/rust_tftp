@@ -1,6 +1,5 @@
-use std::io::Read;
 use std::net::UdpSocket;
-use bytes::{BufMut, BytesMut};
+use bytes::{BufMut, Bytes, BytesMut};
 
 pub enum Opcode {
     RRQ = 1,
@@ -28,7 +27,7 @@ pub enum Packet {
     DataPacket {
         opcode: Opcode,
         block_no: u16,
-        data: bytes::Bytes
+        data: Bytes
     },
     AckPacket {
         opcode: Opcode,
@@ -98,8 +97,59 @@ impl Packet {
         socket.send(&buf).unwrap();
     }
     pub fn receive(socket: &UdpSocket) -> Self {
-        let mut buf = [0u8; 512];
-        let result = socket.recv_from(&mut buf).unwrap();
-        todo!()
+        let mut received = BytesMut::with_capacity(512);
+        socket.recv_from(&mut received).unwrap();
+        let mut buf = Bytes::from(received);
+        match buf[0] {
+            1 => {
+                return Packet::RrqPacket {
+                    opcode: Opcode::RRQ,
+                    filename: Self::extract_str(buf),
+                    mode: Mode::Octet,
+                };
+            }
+            2 => {
+                return Packet::WrqPacket {
+                    opcode: Opcode::RRQ,
+                    filename: Self::extract_str(buf),
+                    mode: Mode::Octet,
+                };
+            }
+            3 => {
+                return Packet::DataPacket {
+                    opcode: Opcode::DATA,
+                    // bitwise operation to convert two u8s into one u16, thanks stackoverflow :)
+                    block_no: ((buf[1] as u16) << 8) | buf[2] as u16,
+                    data: buf.slice(3..buf.len()),
+                };
+            }
+            4 => {
+                return Packet::AckPacket {
+                    opcode: Opcode::ACK,
+                    block_no: ((buf[1] as u16) << 8) | buf[2] as u16,
+                };
+            }
+            5 => {
+                return Packet::ErrPacket {
+                    opcode: Opcode::ERR,
+                    err_code: 0,
+                    err_msg: "File not found".to_string(),
+                };
+            }
+            _ => {
+                panic!("Opcode error")
+            }
+        }
+    }
+
+    fn extract_str(arr: Bytes) -> String {
+        let mut s = String::new();
+        for i in 1..arr.len() {
+            if arr[i].to_string().eq("0") {
+                s = String::from_utf8(arr.slice(1..i).to_vec()).unwrap();
+                return s;
+            }
+        }
+        panic!("No EOF") // if no end-of-file 0 char found
     }
 }
