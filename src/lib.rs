@@ -1,43 +1,43 @@
-use std::net::UdpSocket;
 use bytes::{BufMut, Bytes, BytesMut};
+use std::net::UdpSocket;
 
 pub enum Opcode {
     RRQ = 1,
     WRQ = 2,
     DATA = 3,
     ACK = 4,
-    ERR = 5
+    ERR = 5,
 }
 
 pub enum Mode {
-    Octet
+    Octet,
 }
 
 pub enum Packet {
     WrqPacket {
         opcode: Opcode,
         filename: String,
-        mode: Mode
+        mode: Mode,
     },
     RrqPacket {
         opcode: Opcode,
         filename: String,
-        mode: Mode
+        mode: Mode,
     },
     DataPacket {
         opcode: Opcode,
         block_no: u16,
-        data: Bytes
+        data: Bytes,
     },
     AckPacket {
         opcode: Opcode,
-        block_no: u16
+        block_no: u16,
     },
     ErrPacket {
         opcode: Opcode,
         err_code: u16,
-        err_msg: String
-    }
+        err_msg: String,
+    },
 }
 
 impl Packet {
@@ -45,21 +45,16 @@ impl Packet {
         let mut buf = BytesMut::with_capacity(512);
         match self {
             Packet::WrqPacket {
-                opcode,
-                filename,
-                ..
+                opcode, filename, ..
             } => {
                 buf.put_u8(opcode as u8);
                 buf.put(filename.as_bytes());
                 buf.put_u8(0);
                 buf.put(&b"octet"[..]);
                 buf.put_u8(0);
-
             }
             Packet::RrqPacket {
-                opcode,
-                filename,
-                ..
+                opcode, filename, ..
             } => {
                 buf.put_u8(opcode as u8);
                 buf.put(filename.as_bytes());
@@ -76,17 +71,14 @@ impl Packet {
                 buf.put_u16(block_no);
                 buf.put(data);
             }
-            Packet::AckPacket {
-                opcode,
-                block_no
-            } => {
+            Packet::AckPacket { opcode, block_no } => {
                 buf.put_u8(opcode as u8);
                 buf.put_u16(block_no);
             }
             Packet::ErrPacket {
                 opcode,
                 err_code,
-                err_msg
+                err_msg,
             } => {
                 buf.put_u8(opcode as u8);
                 buf.put_u16(err_code);
@@ -151,5 +143,56 @@ impl Packet {
             }
         }
         panic!("No EOF") // if no end-of-file 0 char found
+    }
+}
+
+#[cfg(test)] // Only compiles if cargo test is executed
+mod tests {
+    // Inline definition of separate Rust file
+    use super::*; // imports crates from outer file
+
+    /// normal Rust test to ensure string is extracted properly:
+    /// constructs byte array with '0' character to indicate
+    /// end of file name
+    #[test]
+    fn test_extract_str() {
+        let mut buf = BytesMut::with_capacity(512);
+        buf.put_u8(1_u8);
+        buf.put(Bytes::from(&b"Hello!"[..]));
+        buf.put_u8(0);
+
+        let buf: Bytes = buf.into();
+
+        assert_eq!(Packet::extract_str(buf), String::from("Hello!"));
+    }
+
+    /// erroneous test to ensure proper EOF error:
+    /// constructs byte array without a '0' character
+    /// that indicates end of file name
+    #[test]
+    #[should_panic(expected = "No EOF")]
+    fn fail_extract_str() {
+        let mut buf = BytesMut::with_capacity(512);
+        buf.put_u8(1_u8);
+        buf.put(Bytes::from(&b"Hello!"[..]));
+
+        let buf: Bytes = buf.into();
+
+        let _ = Packet::extract_str(buf);
+    }
+
+    /// erroneous test to ensure proper detection of invalid UTF-8:
+    /// constructs gibberish byte array not in convertible format
+    #[test]
+    #[should_panic(expected = "FromUtf8Error")]
+    fn malformed_utf8_extract_str() {
+        let mut buf = BytesMut::with_capacity(512);
+        buf.put_u8(1_u8);
+        buf.put(Bytes::from(&[1_u8, 159, 146, 150][..]));
+        buf.put_u8(0);
+
+        let buf: Bytes = buf.into();
+
+        let _ = Packet::extract_str(buf);
     }
 }
