@@ -1,6 +1,7 @@
 use bytes::{BufMut, Bytes, BytesMut};
-use std::net::UdpSocket;
+use std::net::{SocketAddr, UdpSocket};
 
+#[derive(Debug)]
 pub enum Opcode {
     RRQ = 1,
     WRQ = 2,
@@ -8,11 +9,12 @@ pub enum Opcode {
     ACK = 4,
     ERR = 5,
 }
-
+#[derive(Debug)]
 pub enum Mode {
     Octet,
 }
 
+#[derive(Debug)]
 pub enum Packet {
     WrqPacket {
         opcode: Opcode,
@@ -88,58 +90,59 @@ impl Packet {
         }
         socket.send(&buf).unwrap();
     }
-    pub fn receive(socket: &UdpSocket) -> Self {
-        let mut received = BytesMut::with_capacity(512);
-        socket.recv_from(&mut received).unwrap();
-        let mut buf = Bytes::from(received);
-        match buf[0] {
-            1 => {
-                return Packet::RrqPacket {
-                    opcode: Opcode::RRQ,
-                    filename: Self::extract_str(buf),
-                    mode: Mode::Octet,
-                };
-            }
-            2 => {
-                return Packet::WrqPacket {
-                    opcode: Opcode::RRQ,
-                    filename: Self::extract_str(buf),
-                    mode: Mode::Octet,
-                };
-            }
-            3 => {
-                return Packet::DataPacket {
-                    opcode: Opcode::DATA,
-                    // bitwise operation to convert two u8s into one u16, thanks stackoverflow :)
-                    block_no: ((buf[1] as u16) << 8) | buf[2] as u16,
-                    data: buf.slice(3..buf.len()),
-                };
-            }
-            4 => {
-                return Packet::AckPacket {
-                    opcode: Opcode::ACK,
-                    block_no: ((buf[1] as u16) << 8) | buf[2] as u16,
-                };
-            }
-            5 => {
-                return Packet::ErrPacket {
-                    opcode: Opcode::ERR,
-                    err_code: 0,
-                    err_msg: "File not found".to_string(),
-                };
-            }
-            _ => {
-                panic!("Opcode error")
+    pub fn receive(socket: &UdpSocket) -> (Self, SocketAddr) {
+        let mut received = vec![0; 512];
+        loop {
+            if let Ok((_, src)) = socket.recv_from(&mut received) {
+                let buf = Bytes::from(received);
+                return (match buf[0] {
+                    1 => {
+                        Packet::RrqPacket {
+                            opcode: Opcode::RRQ,
+                            filename: Self::extract_str(buf),
+                            mode: Mode::Octet,
+                        }
+                    }
+                    2 => {
+                        Packet::WrqPacket {
+                            opcode: Opcode::RRQ,
+                            filename: Self::extract_str(buf),
+                            mode: Mode::Octet,
+                        }
+                    }
+                    3 => {
+                        Packet::DataPacket {
+                            opcode: Opcode::DATA,
+                            // bitwise operation to convert two u8s into one u16, thanks stackoverflow :)
+                            block_no: ((buf[1] as u16) << 8) | buf[2] as u16,
+                            data: buf.slice(3..buf.len()),
+                        }
+                    }
+                    4 => {
+                        Packet::AckPacket {
+                            opcode: Opcode::ACK,
+                            block_no: ((buf[1] as u16) << 8) | buf[2] as u16,
+                        }
+                    }
+                    5 => {
+                        Packet::ErrPacket {
+                            opcode: Opcode::ERR,
+                            err_code: 0,
+                            err_msg: "File not found".to_string(),
+                        }
+                    }
+                    _ => {
+                        panic!("Opcode error")
+                    }
+                }, src);
             }
         }
     }
 
     fn extract_str(arr: Bytes) -> String {
-        let mut s = String::new();
         for i in 1..arr.len() {
-            if arr[i].to_string().eq("0") {
-                s = String::from_utf8(arr.slice(1..i).to_vec()).unwrap();
-                return s;
+            if arr[i] == 0 {
+                return String::from_utf8(arr.slice(1..i).to_vec()).unwrap();
             }
         }
         panic!("No EOF") // if no end-of-file 0 char found

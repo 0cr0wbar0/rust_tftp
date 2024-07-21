@@ -1,25 +1,36 @@
-use std::net::*;
 use std::io;
+use std::net::*;
 use tftp::*;
 
 fn main() {
-    let socket = UdpSocket::bind("0.0.0.0:8000").unwrap();
-    let mut buf = [0u8; 512];
+    let socket = UdpSocket::bind("0.0.0.0:9000").unwrap();
+    socket.connect("0.0.0.0:8000").expect("Couldn't connect to server");
     let mut request = String::new();
     println!("{}", "Select option: \n 1. send \n 2. receive");
     io::stdin().read_line(&mut request).unwrap();
-    match request.parse() {
-        Ok(1) => {
-            let mut packet = Packet::WrqPacket {
+    match request.trim().parse::<i32>().unwrap() {
+        1 => {
+            let mut write_packet = Packet::WrqPacket {
                 opcode: Opcode::WRQ,
-                filename: "test.txt".to_string(),
+                filename: "write_test.txt".to_string(),
                 mode: Mode::Octet,
             };
-            packet.send(&socket);
+            write_packet.send(&socket);
+            (write_packet, _) = Packet::receive(&socket);
+            dbg!(&write_packet); // todo!("Find a way to print packets")
         }
-        Ok(2) => {
-
+        2 => {
+            let mut read_packet = Packet::RrqPacket {
+                opcode: Opcode::RRQ,
+                filename: "read_test.txt".to_string(),
+                mode: Mode::Octet
+            };
+            read_packet.send(&socket);
+            (read_packet, _) = Packet::receive(&socket);
+            dbg!(&read_packet);
         }
-        _ => {}
+        _ => {
+            todo!()
+        }
     }
 }
