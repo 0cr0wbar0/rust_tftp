@@ -27,7 +27,7 @@ fn main() {
                 let err = Packet::ErrPacket {
                     opcode: Opcode::ERR,
                     err_code: 1,
-                    err_msg: "File not found".to_string(),
+                    err_msg: "File not found".to_string()
                 };
                 err.send(&socket);
             }
@@ -36,6 +36,22 @@ fn main() {
             opcode: Opcode::WRQ, filename, ..
         } => {
             let write_file_path = Path::new(&filename);
+            if write_file_path.exists() {
+                let err = Packet::ErrPacket {
+                    opcode: Opcode::ERR,
+                    err_code: 2,
+                    err_msg: "File already exists".to_string()
+                };
+                err.send(&socket);
+            } else {
+                let new_packet = Packet::AckPacket {
+                    opcode: Opcode::ACK,
+                    block_no: 0
+                };
+                new_packet.send(&socket);
+                let (write_packet, _) = Packet::receive(&socket);
+                dbg!(&write_packet);
+            }
         }
         _ => {
             panic!("Opcode error")

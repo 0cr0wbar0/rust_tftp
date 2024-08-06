@@ -1,23 +1,37 @@
-use std::io;
+use std::{fs, io};
 use std::net::*;
+use bytes::Bytes;
 use tftp::*;
 
 fn main() {
     let socket = UdpSocket::bind("0.0.0.0:9000").unwrap();
     socket.connect("0.0.0.0:8000").expect("Couldn't connect to server");
-    let mut request = String::new();
+    let mut num_request = String::new();
+    let mut file_request = String::new();
     println!("{}", "Select option: \n 1. send \n 2. receive");
-    io::stdin().read_line(&mut request).unwrap();
-    match request.trim().parse::<i32>().unwrap() {
+    io::stdin().read_line(&mut num_request).unwrap();
+    println!("{}", "Enter name of file: ");
+    io::stdin().read_line(&mut file_request).unwrap();
+    match num_request.trim().parse::<i32>().unwrap() {
         1 => {
             let mut write_packet = Packet::WrqPacket {
                 opcode: Opcode::WRQ,
-                filename: "write_test.txt".to_string(),
+                filename: file_request,
                 mode: Mode::Octet,
             };
             write_packet.send(&socket);
             (write_packet, _) = Packet::receive(&socket);
-            dbg!(&write_packet); // todo!("Find a way to print packets")
+            if let Packet::AckPacket {opcode: Opcode::ACK, ..} = write_packet {
+                let data = Bytes::from(fs::read(file_request).unwrap());
+                let new_write_packet = Packet::DataPacket {
+                    opcode: Opcode::DATA,
+                    block_no: 1,
+                    data
+                };
+                new_write_packet.send(&socket);
+            } else {
+                dbg!(&write_packet);
+            }
         }
         2 => {
             let mut read_packet = Packet::RrqPacket {
@@ -30,7 +44,7 @@ fn main() {
             dbg!(&read_packet);
         }
         _ => {
-            todo!()
+            // todo!("Handle incorrect input")
         }
     }
 }
