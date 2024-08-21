@@ -20,9 +20,15 @@ fn main() {
                 mode: Mode::Octet,
             };
             write_packet.send(&socket);
-            (write_packet, _) = Packet::receive(&socket);
-            if let Packet::AckPacket {opcode: Opcode::ACK, ..} = write_packet {
-                let data = Bytes::from(fs::read(file_request).unwrap());
+            let (recv_packet, _) = Packet::receive(&socket);
+            // need to match both packets at the same time in if-let
+            // in order to access attributes from both at the same time
+            // this negates the need to nest if-let statements
+            if let (
+                Packet::AckPacket {opcode: Opcode::ACK, ..},
+                Packet::WrqPacket {filename, ..}
+            ) = (recv_packet, &write_packet) {
+                let data = Bytes::from(fs::read(filename).unwrap());
                 let new_write_packet = Packet::DataPacket {
                     opcode: Opcode::DATA,
                     block_no: 1,

@@ -2,6 +2,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 use std::net::{SocketAddr, UdpSocket};
 
 #[derive(Debug)]
+#[derive(Copy, Clone)]
 pub enum Opcode {
     RRQ = 1,
     WRQ = 2,
@@ -43,13 +44,15 @@ pub enum Packet {
 }
 
 impl Packet {
-    pub fn send(self, socket: &UdpSocket) {
+    pub fn send(&self, socket: &UdpSocket) {
+        // borrowing self in case need to use packet later
+        // therefore, most attributes in packet need dereferencing
         let mut buf = BytesMut::with_capacity(512);
         match self {
             Packet::WrqPacket {
                 opcode, filename, ..
             } => {
-                buf.put_u8(opcode as u8);
+                buf.put_u8(*opcode as u8);
                 buf.put(filename.as_bytes());
                 buf.put_u8(0);
                 buf.put(&b"octet"[..]);
@@ -58,7 +61,7 @@ impl Packet {
             Packet::RrqPacket {
                 opcode, filename, ..
             } => {
-                buf.put_u8(opcode as u8);
+                buf.put_u8(*opcode as u8);
                 buf.put(filename.as_bytes());
                 buf.put_u8(0);
                 buf.put(&b"octet"[..]);
@@ -69,21 +72,21 @@ impl Packet {
                 block_no,
                 data,
             } => {
-                buf.put_u8(opcode as u8);
-                buf.put_u16(block_no);
-                buf.put(data);
+                buf.put_u8(*opcode as u8);
+                buf.put_u16(*block_no);
+                buf.put(&data[..]);
             }
             Packet::AckPacket { opcode, block_no } => {
-                buf.put_u8(opcode as u8);
-                buf.put_u16(block_no);
+                buf.put_u8(*opcode as u8);
+                buf.put_u16(*block_no);
             }
             Packet::ErrPacket {
                 opcode,
                 err_code,
                 err_msg,
             } => {
-                buf.put_u8(opcode as u8);
-                buf.put_u16(err_code);
+                buf.put_u8(*opcode as u8);
+                buf.put_u16(*err_code);
                 buf.put(err_msg.as_bytes());
                 buf.put_u8(0);
             }
