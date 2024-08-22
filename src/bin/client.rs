@@ -14,7 +14,7 @@ fn main() {
     io::stdin().read_line(&mut file_request).unwrap();
     match num_request.trim().parse::<i32>().unwrap() {
         1 => {
-            let mut write_packet = Packet::WrqPacket {
+            let write_packet = Packet::WrqPacket {
                 opcode: Opcode::WRQ,
                 filename: file_request,
                 mode: Mode::Octet,
@@ -42,7 +42,7 @@ fn main() {
         2 => {
             let mut read_packet = Packet::RrqPacket {
                 opcode: Opcode::RRQ,
-                filename: "read_test.txt".to_string(),
+                filename: file_request,
                 mode: Mode::Octet
             };
             read_packet.send(&socket);
@@ -50,7 +50,7 @@ fn main() {
             dbg!(&read_packet);
         }
         _ => {
-            // todo!("Handle incorrect input")
+            panic!("Incorrect input, type 1 or 2 and then press enter")
         }
     }
 }
