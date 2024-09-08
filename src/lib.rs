@@ -52,6 +52,7 @@ impl Packet {
             Packet::WrqPacket {
                 opcode, filename, ..
             } => {
+                buf.put_u8(0);
                 buf.put_u8(*opcode as u8);
                 buf.put(filename.as_bytes());
                 buf.put_u8(0);
@@ -61,6 +62,7 @@ impl Packet {
             Packet::RrqPacket {
                 opcode, filename, ..
             } => {
+                buf.put_u8(0);
                 buf.put_u8(*opcode as u8);
                 buf.put(filename.as_bytes());
                 buf.put_u8(0);
@@ -72,11 +74,13 @@ impl Packet {
                 block_no,
                 data,
             } => {
+                buf.put_u8(0);
                 buf.put_u8(*opcode as u8);
                 buf.put_u16(*block_no);
                 buf.put(&data[..]);
             }
             Packet::AckPacket { opcode, block_no } => {
+                buf.put_u8(0);
                 buf.put_u8(*opcode as u8);
                 buf.put_u16(*block_no);
             }
@@ -85,6 +89,7 @@ impl Packet {
                 err_code,
                 err_msg,
             } => {
+                buf.put_u8(0);
                 buf.put_u8(*opcode as u8);
                 buf.put_u16(*err_code);
                 buf.put(err_msg.as_bytes());
@@ -98,7 +103,7 @@ impl Packet {
         loop {
             if let Ok((_, src)) = socket.recv_from(&mut received) {
                 let buf = Bytes::from(received);
-                return (match buf[0] {
+                return (match buf[1] {
                     1 => {
                         Packet::RrqPacket {
                             opcode: Opcode::RRQ,
@@ -108,7 +113,7 @@ impl Packet {
                     }
                     2 => {
                         Packet::WrqPacket {
-                            opcode: Opcode::RRQ,
+                            opcode: Opcode::WRQ,
                             filename: Self::extract_str(buf),
                             mode: Mode::Octet,
                         }
@@ -117,21 +122,21 @@ impl Packet {
                         Packet::DataPacket {
                             opcode: Opcode::DATA,
                             // bitwise operation to convert two u8s into one u16, thanks stackoverflow :)
-                            block_no: ((buf[1] as u16) << 8) | buf[2] as u16,
-                            data: buf.slice(3..buf.len()),
+                            block_no: ((buf[2] as u16) << 8) | buf[3] as u16,
+                            data: buf.slice(4..buf.len()),
                         }
                     }
                     4 => {
                         Packet::AckPacket {
                             opcode: Opcode::ACK,
-                            block_no: ((buf[1] as u16) << 8) | buf[2] as u16,
+                            block_no: ((buf[2] as u16) << 8) | buf[3] as u16,
                         }
                     }
                     5 => {
                         Packet::ErrPacket {
                             opcode: Opcode::ERR,
-                            err_code: 0,
-                            err_msg: "File not found".to_string(),
+                            err_code: ((buf[2] as u16) << 8) | buf[3] as u16,
+                            err_msg: Self::extract_err_msg(buf),
                         }
                     }
                     _ => {
@@ -143,12 +148,21 @@ impl Packet {
     }
 
     fn extract_str(arr: Bytes) -> String {
-        for i in 1..arr.len() {
+        for i in 2..arr.len() {
             if arr[i] == 0 {
-                return String::from_utf8(arr.slice(1..i).to_vec()).unwrap();
+                return String::from_utf8(arr.slice(2..i).to_vec()).unwrap();
             }
         }
-        panic!("No EOF") // if no end-of-file 0 char found
+        panic!("No filename EOF") // if no end-of-file 0 char found
+    }
+
+    fn extract_err_msg(arr:Bytes) -> String {
+        for i in 4..arr.len() {
+            if arr[i] == 0 {
+                return String::from_utf8(arr.slice(4..i).to_vec()).unwrap();
+            }
+        }
+        panic!("No err msg EOF")
     }
 }
 

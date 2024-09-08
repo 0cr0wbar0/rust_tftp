@@ -16,7 +16,7 @@ fn main() {
         1 => {
             let write_packet = Packet::WrqPacket {
                 opcode: Opcode::WRQ,
-                filename: file_request,
+                filename: file_request.trim_end().to_string(),
                 mode: Mode::Octet,
             };
             write_packet.send(&socket);
@@ -42,7 +42,7 @@ fn main() {
         2 => {
             let mut read_packet = Packet::RrqPacket {
                 opcode: Opcode::RRQ,
-                filename: file_request,
+                filename: file_request.trim_end().to_string(),
                 mode: Mode::Octet
             };
             read_packet.send(&socket);
