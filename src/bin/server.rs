@@ -15,7 +15,6 @@ fn main() {
             let read_file_path = Path::new(&filename);
             if read_file_path.exists() {
                 let data = Bytes::from(fs::read(filename).unwrap());
-                assert!(data.len() < 509, "Larger files are not handled currently");
                 let new_packet = Packet::DataPacket {
                     opcode: Opcode::DATA,
                     block_no: 0,

@@ -1,3 +1,4 @@
+use std::cmp;
 use bytes::{BufMut, Bytes, BytesMut};
 use std::net::{SocketAddr, UdpSocket};
 
@@ -43,11 +44,13 @@ pub enum Packet {
     },
 }
 
+const MAX_DATA_SIZE: usize = 512;
+
 impl Packet {
     pub fn send(&self, socket: &UdpSocket) {
         // borrowing self in case need to use packet later
         // therefore, most attributes in packet need dereferencing
-        let mut buf = BytesMut::with_capacity(512);
+        let mut buf = BytesMut::with_capacity(MAX_DATA_SIZE);
         match self {
             Packet::WrqPacket {
                 opcode, filename, ..
@@ -99,7 +102,7 @@ impl Packet {
         socket.send(&buf).unwrap();
     }
     pub fn receive(socket: &UdpSocket) -> (Self, SocketAddr) {
-        let mut received = vec![0; 512];
+        let mut received = vec![0; MAX_DATA_SIZE];
         loop {
             if let Ok((_, src)) = socket.recv_from(&mut received) {
                 let buf = Bytes::from(received);
@@ -164,6 +167,29 @@ impl Packet {
         }
         panic!("No err msg EOF")
     }
+
+    fn send_file(file_bytes: Bytes, socket: &UdpSocket) {
+        let num_of_blocks = file_bytes.len() / MAX_DATA_SIZE;
+        for i in 0..num_of_blocks {
+            let start = (i - 1) * MAX_DATA_SIZE;
+            let end = cmp::min(i * MAX_DATA_SIZE, file_bytes.len());
+            let data = file_bytes.slice(start..end);
+            let sent = Packet::DataPacket {
+                opcode: Opcode::DATA,
+                block_no: i as u16,
+                data
+            };
+            sent.send(&socket);
+            let (received, _) = Packet::receive(&socket);
+            if let Packet::AckPacket {opcode: Opcode::ACK, block_no: num} = received {
+                if num != i as u16 {
+                    eprintln!("Packets received in wrong order!")
+                }
+            } else {
+                panic!("Opcode error")
+            }
+        }
+    }
 }
 
 #[cfg(test)] // Only compiles if cargo test is executed
@@ -176,7 +202,7 @@ mod tests {
     /// end of file name
     #[test]
     fn test_extract_str() {
-        let mut buf = BytesMut::with_capacity(512);
+        let mut buf = BytesMut::with_capacity(MAX_DATA_SIZE);
         buf.put_u8(1_u8);
         buf.put(Bytes::from(&b"Hello!"[..]));
         buf.put_u8(0);
@@ -192,7 +218,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "No EOF")]
     fn fail_extract_str() {
-        let mut buf = BytesMut::with_capacity(512);
+        let mut buf = BytesMut::with_capacity(MAX_DATA_SIZE);
         buf.put_u8(1_u8);
         buf.put(Bytes::from(&b"Hello!"[..]));
 
@@ -206,7 +232,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "FromUtf8Error")]
     fn malformed_utf8_extract_str() {
-        let mut buf = BytesMut::with_capacity(512);
+        let mut buf = BytesMut::with_capacity(MAX_DATA_SIZE);
         buf.put_u8(1_u8);
         buf.put(Bytes::from(&[1_u8, 159, 146, 150][..]));
         buf.put_u8(0);
