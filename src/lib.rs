@@ -55,12 +55,13 @@ impl Packet {
             Packet::WrqPacket {
                 opcode, filename, ..
             } => {
+                // EOF bytes in hex format
                 buf.put_u8(0);
                 buf.put_u8(*opcode as u8);
                 buf.put(filename.as_bytes());
-                buf.put_u8(0);
+                buf.put_u8(0x00);
                 buf.put(&b"octet"[..]);
-                buf.put_u8(0);
+                buf.put_u8(0x00);
             }
             Packet::RrqPacket {
                 opcode, filename, ..
@@ -68,9 +69,9 @@ impl Packet {
                 buf.put_u8(0);
                 buf.put_u8(*opcode as u8);
                 buf.put(filename.as_bytes());
-                buf.put_u8(0);
+                buf.put_u8(0x00);
                 buf.put(&b"octet"[..]);
-                buf.put_u8(0);
+                buf.put_u8(0x00);
             }
             Packet::DataPacket {
                 opcode,
@@ -96,7 +97,7 @@ impl Packet {
                 buf.put_u8(*opcode as u8);
                 buf.put_u16(*err_code);
                 buf.put(err_msg.as_bytes());
-                buf.put_u8(0);
+                buf.put_u8(0x00);
             }
         }
         socket.send(&buf).unwrap();
@@ -152,7 +153,7 @@ impl Packet {
 
     fn extract_str(arr: Bytes) -> String {
         for i in 2..arr.len() {
-            if arr[i] == 0 {
+            if arr[i] == 0x00 {
                 return String::from_utf8(arr.slice(2..i).to_vec()).unwrap();
             }
         }
@@ -161,7 +162,7 @@ impl Packet {
 
     fn extract_err_msg(arr:Bytes) -> String {
         for i in 4..arr.len() {
-            if arr[i] == 0 {
+            if arr[i] == 0x00 {
                 return String::from_utf8(arr.slice(4..i).to_vec()).unwrap();
             }
         }

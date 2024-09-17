@@ -8,9 +8,9 @@ fn main() {
     socket.connect("0.0.0.0:8000").expect("Couldn't connect to server");
     let mut num_request = String::new();
     let mut file_request = String::new();
-    println!("{}", "Select option: \n 1. send \n 2. receive");
+    println!("Select option: \n 1. send \n 2. receive");
     io::stdin().read_line(&mut num_request).unwrap();
-    println!("{}", "Enter name of file: ");
+    println!("Enter name of file: ");
     io::stdin().read_line(&mut file_request).unwrap();
     match num_request.trim().parse::<i32>().unwrap() {
         1 => {
@@ -40,13 +40,13 @@ fn main() {
             }
         }
         2 => {
-            let mut read_packet = Packet::RrqPacket {
+            let read_packet = Packet::RrqPacket {
                 opcode: Opcode::RRQ,
                 filename: file_request.trim_end().to_string(),
                 mode: Mode::Octet
             };
             read_packet.send(&socket);
-            (read_packet, _) = Packet::receive(&socket);
+            let (read_packet, _) = Packet::receive(&socket);
             dbg!(&read_packet);
         }
         _ => {
