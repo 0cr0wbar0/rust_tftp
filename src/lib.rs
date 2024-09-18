@@ -191,6 +191,34 @@ impl Packet {
             }
         }
     }
+
+    fn receive_file(socket: &UdpSocket) -> Bytes {
+        let mut file_bytes: Vec<u8> = vec![];
+        let mut reached_end: bool = false;
+        loop {
+            let (received, _) = Packet::receive(&socket);
+            if let Packet::DataPacket {opcode:Opcode::DATA, block_no: num, data: packet_bytes} = received {
+                reached_end = packet_bytes.len() < MAX_DATA_SIZE-4;
+                file_bytes.put(packet_bytes);
+                let sent = Packet::AckPacket {
+                    opcode: Opcode::ACK,
+                    block_no: num,
+                };
+                sent.send(&socket);
+            }
+            if reached_end { break; }
+        }
+        // let (received, _) = Packet::receive(&socket);
+        // if let Packet::DataPacket {opcode:Opcode::DATA, block_no: num, data: packet_bytes} = received {
+        //     file_bytes.put(packet_bytes);
+        //     let sent = Packet::AckPacket {
+        //         opcode: Opcode::ACK,
+        //         block_no: num,
+        //     };
+        //     sent.send(&socket);
+        // }
+        Bytes::from(file_bytes)
+    }
 }
 
 #[cfg(test)] // Only compiles if cargo test is executed
