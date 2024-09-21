@@ -1,4 +1,6 @@
 use std::fs;
+use std::fs::File;
+use std::io::Write;
 use std::net::*;
 use std::path::Path;
 use bytes::Bytes;
@@ -8,6 +10,7 @@ fn main() {
     let socket = UdpSocket::bind("0.0.0.0:8000").unwrap();
     let (packet, client_addr) = Packet::receive(&socket);
     socket.connect(client_addr).unwrap();
+    println!("Connection received from {}", client_addr);
     match packet {
         Packet::RrqPacket {
             opcode: Opcode::RRQ, filename, ..
@@ -15,13 +18,7 @@ fn main() {
             let read_file_path = Path::new(&filename);
             if read_file_path.exists() {
                 let data = Bytes::from(fs::read(filename).unwrap());
-                let new_packet = Packet::DataPacket {
-                    opcode: Opcode::DATA,
-                    block_no: 0,
-                    data,
-                };
-                new_packet.send(&socket);
-                // todo!("Packet sending loop")
+                Packet::send_file(data, &socket).expect("Wrong packet type received!");
             } else {
                 let err = Packet::ErrPacket {
                     opcode: Opcode::ERR,
@@ -38,7 +35,7 @@ fn main() {
             if write_file_path.exists() {
                 let err = Packet::ErrPacket {
                     opcode: Opcode::ERR,
-                    err_code: 2,
+                    err_code: 6,
                     err_msg: "File already exists".to_string()
                 };
                 err.send(&socket);
@@ -48,8 +45,9 @@ fn main() {
                     block_no: 0
                 };
                 new_packet.send(&socket);
-                let (write_packet, _) = Packet::receive(&socket);
-                dbg!(&write_packet);
+                let file_bytes = Packet::receive_file(&socket);
+                let mut file = File::create(filename).unwrap();
+                file.write_all(&file_bytes).unwrap();
             }
         }
         _ => {

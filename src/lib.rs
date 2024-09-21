@@ -123,11 +123,12 @@ impl Packet {
                         }
                     }
                     3 => {
+                        let packet_data = Self::trim_data_packet_end(buf);
                         Packet::DataPacket {
                             opcode: Opcode::DATA,
                             // bitwise operation to convert two u8s into one u16, thanks stackoverflow :)
-                            block_no: ((buf[2] as u16) << 8) | buf[3] as u16,
-                            data: buf.slice(4..buf.len()),
+                            block_no: ((packet_data[2] as u16) << 8) | packet_data[3] as u16,
+                            data: packet_data.slice(4..packet_data.len()),
                         }
                     }
                     4 => {
@@ -159,6 +160,16 @@ impl Packet {
         }
         panic!("No filename EOF") // if no end-of-file 0 char found
     }
+    
+    fn trim_data_packet_end(arr: Bytes) -> Bytes {
+        let mut end: usize = 0;
+        for i in 0..arr.len() {
+            if arr[i] != 0 {
+                end = i;
+            }
+        }
+        arr.slice(0..=end)
+    }
 
     fn extract_err_msg(arr:Bytes) -> String {
         for i in 4..arr.len() {
@@ -169,9 +180,9 @@ impl Packet {
         panic!("No err msg EOF")
     }
 
-    fn send_file(file_bytes: Bytes, socket: &UdpSocket) {
-        let num_of_blocks = file_bytes.len() / MAX_DATA_SIZE;
-        for i in 0..num_of_blocks {
+    pub fn send_file(file_bytes: Bytes, socket: &UdpSocket) -> Result<Bytes, String> {
+        let num_of_blocks = file_bytes.len() / MAX_DATA_SIZE + 1;
+        for i in 1..=num_of_blocks {
             let start = (i - 1) * MAX_DATA_SIZE;
             let end = cmp::min(i * MAX_DATA_SIZE, file_bytes.len());
             let data = file_bytes.slice(start..end);
@@ -180,43 +191,39 @@ impl Packet {
                 block_no: i as u16,
                 data
             };
-            sent.send(&socket);
-            let (received, _) = Packet::receive(&socket);
+            sent.send(socket);
+            let (received, _) = Packet::receive(socket);
             if let Packet::AckPacket {opcode: Opcode::ACK, block_no: num} = received {
                 if num != i as u16 {
                     eprintln!("Packets received in wrong order!")
                 }
             } else {
-                panic!("Opcode error")
+                return Err(String::from("Wrong packet type received!"));
             }
         }
+        Ok(file_bytes)
     }
 
-    fn receive_file(socket: &UdpSocket) -> Bytes {
+    pub fn receive_file(socket: &UdpSocket) -> Bytes {
         let mut file_bytes: Vec<u8> = vec![];
         let mut reached_end: bool = false;
         loop {
-            let (received, _) = Packet::receive(&socket);
-            if let Packet::DataPacket {opcode:Opcode::DATA, block_no: num, data: packet_bytes} = received {
+            let (received, _) = Packet::receive(socket);
+            if let Packet::DataPacket {
+                opcode:Opcode::DATA,
+                block_no: num,
+                data: packet_bytes
+            } = received {
                 reached_end = packet_bytes.len() < MAX_DATA_SIZE-4;
                 file_bytes.put(packet_bytes);
                 let sent = Packet::AckPacket {
                     opcode: Opcode::ACK,
                     block_no: num,
                 };
-                sent.send(&socket);
+                sent.send(socket);
             }
             if reached_end { break; }
         }
-        // let (received, _) = Packet::receive(&socket);
-        // if let Packet::DataPacket {opcode:Opcode::DATA, block_no: num, data: packet_bytes} = received {
-        //     file_bytes.put(packet_bytes);
-        //     let sent = Packet::AckPacket {
-        //         opcode: Opcode::ACK,
-        //         block_no: num,
-        //     };
-        //     sent.send(&socket);
-        // }
         Bytes::from(file_bytes)
     }
 }

@@ -1,4 +1,6 @@
 use std::{fs, io};
+use std::fs::File;
+use std::io::Write;
 use std::net::*;
 use bytes::Bytes;
 use tftp::*;
@@ -20,7 +22,8 @@ fn main() {
                 mode: Mode::Octet,
             };
             write_packet.send(&socket);
-            let (recv_packet, _) = Packet::receive(&socket);
+            let (recv_packet, server_addr) = Packet::receive(&socket);
+            println!("Connection received from {}", server_addr);
             // need to match both packets at the same time in if-let
             // in order to access attributes from both at the same time
             // this negates the need to nest if-let statements
@@ -29,12 +32,7 @@ fn main() {
                 Packet::WrqPacket {filename, ..}
             ) = (recv_packet, &write_packet) {
                 let data = Bytes::from(fs::read(filename).unwrap());
-                let new_write_packet = Packet::DataPacket {
-                    opcode: Opcode::DATA,
-                    block_no: 1,
-                    data
-                };
-                new_write_packet.send(&socket);
+                Packet::send_file(data, &socket).expect("Wrong packet type received!");
             } else {
                 dbg!(&write_packet);
             }
@@ -46,8 +44,9 @@ fn main() {
                 mode: Mode::Octet
             };
             read_packet.send(&socket);
-            let (read_packet, _) = Packet::receive(&socket);
-            dbg!(&read_packet);
+            let file_bytes= Packet::receive_file(&socket);
+            let mut file = File::create(file_request).unwrap();
+            file.write_all(&file_bytes).unwrap();
         }
         _ => {
             panic!("Incorrect input, type 1 or 2 and then press enter")
