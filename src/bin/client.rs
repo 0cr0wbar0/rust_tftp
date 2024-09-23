@@ -1,8 +1,7 @@
 use std::{fs, io};
 use std::fs::File;
 use std::io::Write;
-use std::net::*;
-use bytes::Bytes;
+use std::net::UdpSocket;
 use tftp::*;
 
 fn main() {
@@ -31,7 +30,8 @@ fn main() {
                 Packet::AckPacket {opcode: Opcode::ACK, ..},
                 Packet::WrqPacket {filename, ..}
             ) = (recv_packet, &write_packet) {
-                let data = Bytes::from(fs::read(filename).unwrap());
+                let client_dir = "client/".to_owned() + filename;
+                let data = fs::read(client_dir).unwrap();
                 Packet::send_file(data, &socket).expect("Wrong packet type received!");
             } else {
                 dbg!(&write_packet);
@@ -45,7 +45,8 @@ fn main() {
             };
             read_packet.send(&socket);
             let file_bytes= Packet::receive_file(&socket);
-            let mut file = File::create(file_request).unwrap();
+            let client_dir = "client/".to_owned() + &file_request;
+            let mut file = File::create(client_dir).unwrap();
             file.write_all(&file_bytes).unwrap();
         }
         _ => {
