@@ -47,7 +47,7 @@ fn main() {
                 };
                 new_packet.send(&socket);
                 let file_bytes = Packet::receive_file(&socket);
-                let mut file = File::create(server_dir).unwrap();
+                let mut file = File::create(server_dir.trim_end()).unwrap();
                 file.write_all(&file_bytes).unwrap();
             }
         }

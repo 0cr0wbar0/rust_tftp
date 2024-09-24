@@ -11,9 +11,11 @@ fn main() {
     let mut file_request = String::new();
     println!("Select option: \n 1. send \n 2. receive");
     io::stdin().read_line(&mut num_request).unwrap();
+    let num_request = num_request.trim().parse::<i32>().unwrap();
+    assert!(![1,2].contains(&num_request), "Incorrect input, type 1 or 2 and then press enter");
     println!("Enter name of file: ");
     io::stdin().read_line(&mut file_request).unwrap();
-    match num_request.trim().parse::<i32>().unwrap() {
+    match num_request {
         1 => {
             let write_packet = Packet::WrqPacket {
                 opcode: Opcode::WRQ,
@@ -46,11 +48,11 @@ fn main() {
             read_packet.send(&socket);
             let file_bytes= Packet::receive_file(&socket);
             let client_dir = "client/".to_owned() + &file_request;
-            let mut file = File::create(client_dir).unwrap();
+            let mut file = File::create_new(client_dir.trim_end()).unwrap();
             file.write_all(&file_bytes).unwrap();
         }
         _ => {
-            panic!("Incorrect input, type 1 or 2 and then press enter")
+            unreachable!()
         }
     }
 }
