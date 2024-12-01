@@ -12,7 +12,7 @@ fn main() {
     println!("Select option: \n 1. send \n 2. receive");
     io::stdin().read_line(&mut num_request).unwrap();
     let num_request = num_request.trim().parse::<i32>().unwrap();
-    assert!(![1,2].contains(&num_request), "Incorrect input, type 1 or 2 and then press enter");
+    assert!([1,2].contains(&num_request), "Incorrect input, type 1 or 2 and then press enter");
     println!("Enter name of file: ");
     io::stdin().read_line(&mut file_request).unwrap();
     match num_request {
