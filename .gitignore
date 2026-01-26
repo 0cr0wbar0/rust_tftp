@@ -1,0 +1,8 @@
+/target
+/.idea
+/client
+/server
+*.txt
+*.png
+*.jpg
+*.bmp
