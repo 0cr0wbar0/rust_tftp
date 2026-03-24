@@ -3,4 +3,5 @@
 /client/*
 !/client/.gitkeep
 /server/*
-!/client/.gitkeep
+!/server/.gitkeep
+.DS_Store
